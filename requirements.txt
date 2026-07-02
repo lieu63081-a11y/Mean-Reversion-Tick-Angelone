@@ -1,0 +1,10 @@
+# Angel One tick recorder dependencies (single-file tool)
+
+# Angel One SmartAPI + WebSocket auth
+smartapi-python>=1.5.5
+pyotp>=2.10.0
+websocket-client>=1.9.0
+
+# Data handling + Parquet storage
+pandas>=1.5.0
+pyarrow>=15.0.0
