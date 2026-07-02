@@ -10,13 +10,18 @@ from Angel One SmartWebSocketV2 into compressed Parquet files
 (one per date × ticker). No external files needed — just this script.
 
 USAGE:
-    # Set 4 environment variables (see README.md for how to get them)
+    # ONE-TIME SETUP: copy the template and fill in your credentials
+    cp .env.example .env
+    nano .env    # edit with real API_KEY / CLIENT_CODE / PIN / TOTP_SECRET
+
+    # Record full Nifty 50 in SNAP_QUOTE mode (default)
+    python3 tick_recorder.py
+
+    # Alternative: set as shell env vars instead of .env file
     export ANGEL_API_KEY='...'
     export ANGEL_CLIENT_CODE='A123456'
     export ANGEL_PIN='1234'
     export ANGEL_TOTP_SECRET='JBSWY3DPEHPK3PXP'
-
-    # Record full Nifty 50 in SNAP_QUOTE mode (default)
     python3 tick_recorder.py
 
     # Record specific tickers only
@@ -64,6 +69,45 @@ from typing import Dict, List, Optional
 # Suppress noisy loggers
 logging.getLogger("SmartApi").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
+
+
+# ═══════════════════════════════════════════════════════════════════════ #
+#                       AUTO-LOAD .env FILE                                #
+# ═══════════════════════════════════════════════════════════════════════ #
+def _autoload_dotenv():
+    """
+    Parse .env in the current working directory (or the script's directory)
+    and populate os.environ for any key not already set.
+
+    Zero-dependency implementation — no python-dotenv needed.
+    Format:  KEY=value   (# comments and blank lines ignored)
+             Optional single/double quotes around value are stripped.
+    """
+    candidates = [
+        Path.cwd() / ".env",
+        Path(__file__).resolve().parent / ".env",
+    ]
+    for env_path in candidates:
+        if not env_path.exists():
+            continue
+        try:
+            with open(env_path) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    k, _, v = line.partition("=")
+                    k = k.strip()
+                    v = v.strip().strip('"').strip("'")
+                    # Only set if not already exported in the shell
+                    os.environ.setdefault(k, v)
+            return env_path
+        except Exception as e:
+            print(f"[.env] warning: failed to load {env_path}: {e}",
+                  file=sys.stderr)
+    return None
+
+_loaded_env = _autoload_dotenv()
 
 
 # ═══════════════════════════════════════════════════════════════════════ #
@@ -710,11 +754,15 @@ def main():
     log.info(f"  Flush:    every {args.flush_every}s")
     log.info("═" * 72)
 
+    if _loaded_env:
+        log.info(f"  Loaded credentials from: {_loaded_env}")
+
     required = ["ANGEL_API_KEY", "ANGEL_CLIENT_CODE",
                 "ANGEL_PIN", "ANGEL_TOTP_SECRET"]
     missing = [v for v in required if not os.environ.get(v)]
     if missing:
         log.error(f"Missing env vars: {missing}")
+        log.error("Fix: cp .env.example .env  &&  edit .env with your credentials")
         log.error("See README.md — Section 'Setup credentials'.")
         sys.exit(1)
 

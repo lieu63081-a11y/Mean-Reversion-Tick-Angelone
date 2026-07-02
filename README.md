@@ -50,57 +50,91 @@ That pulls in `smartapi-python`, `pyotp`, `websocket-client`, `pandas`, `pyarrow
 
 ## 🔑 Setup Credentials (One-time, ~10 minutes)
 
-You need four things from Angel One:
+The easiest way: fill in a **`.env` file**. The recorder auto-loads it —
+you don't need to type export commands every time.
 
-### 1. Enable SmartAPI on your Angel account
+### Step 1 — Copy the template
 
+```bash
+cp .env.example .env
+```
+
+Now open `.env` in any editor:
+```bash
+nano .env       # or vim, code, notepad, etc.
+```
+
+You'll see four lines to fill in:
+
+```env
+ANGEL_API_KEY=paste_your_smartapi_api_key_here
+ANGEL_CLIENT_CODE=A123456
+ANGEL_PIN=1234
+ANGEL_TOTP_SECRET=JBSWY3DPEHPK3PXP
+```
+
+### Step 2 — How to get each value
+
+#### `ANGEL_API_KEY`
 1. Log in at [smartapi.angelbroking.com](https://smartapi.angelbroking.com/)
-   with your Angel One credentials.
-2. Click **Create App** → product type **Trading API**.
+2. Click **Create App** → product type **Trading API**
 3. Fill:
    - App name: anything (e.g. `tick_recorder`)
    - Redirect URL: `http://localhost` (not used, but required)
    - Postback URL: leave blank
-4. **Copy the API Key** shown. This is your `ANGEL_API_KEY`.
+4. Copy the API Key shown. Paste into `.env`.
 
-### 2. Enable TOTP (for auto-login)
+#### `ANGEL_TOTP_SECRET` (Base32 secret, not the 6-digit code)
+1. On the same SmartAPI page, click **Generate TOTP** → QR code appears.
+2. Scan the QR with Google Authenticator (or Authy, 1Password) so you
+   can also login manually if needed.
+3. **CRITICAL:** click **"Can't scan QR?"** — the Base32 secret is
+   revealed (looks like `JBSWY3DPEHPK3PXP...`). Copy this. Paste into `.env`.
+4. Without this secret, the recorder cannot auto-login every session.
 
-1. On the same page, click **Generate TOTP** → a QR code appears.
-2. Scan the QR with Google Authenticator (or any TOTP app: Authy, 1Password).
-3. **Also copy the Base32 secret** — click "Can't scan QR?" to reveal it.
-   It looks like `JBSWY3DPEHPK3PXP...`. This is your `ANGEL_TOTP_SECRET`.
-   Without it, the algo cannot auto-login.
+#### `ANGEL_CLIENT_CODE`
+Your Angel One user ID (e.g. `A123456`), shown in your Angel profile.
+Usually starts with a letter.
 
-### 3. Note your Client Code + PIN
+#### `ANGEL_PIN`
+Your 4-digit **trading PIN** (for order placement).
+This is NOT your login password.
 
-- **Client Code**: your Angel One user ID (e.g. `A123456`), shown in profile.
-- **PIN**: the 4-digit trading PIN you use for order placement (not the login password).
+### Step 3 — Verify
 
-### 4. Export the 4 variables
-
-Add to `~/.bashrc` or `~/.zshrc`:
-
+Once your `.env` is filled in, just run:
 ```bash
-export ANGEL_API_KEY='paste_your_api_key'
+python3 tick_recorder.py --tickers TCS.NS
+```
+
+You should see:
+```
+Loaded credentials from: /path/to/.env
+🟢 Angel One session — user: A123456 (Your Name)
+🟢 WebSocket connected — subscribing 1 tickers in SNAP mode
+```
+
+If you see `Missing env vars: [...]`, your `.env` is not being found or
+some values are empty. Re-check `cat .env` for typos.
+
+### Security notes
+
+- ✅ `.env` is already in `.gitignore` — safe from `git commit`
+- ✅ `.env.example` **IS** committed as a template — it has only dummy values
+- ⚠️ Don't share your `.env` file. Anyone with those creds can trade on your account.
+- ⚠️ On shared machines, use file permissions: `chmod 600 .env`
+
+### Alternative: shell env vars (no .env file)
+
+If you prefer, you can still export in your shell profile:
+```bash
+export ANGEL_API_KEY='...'
 export ANGEL_CLIENT_CODE='A123456'
 export ANGEL_PIN='1234'
 export ANGEL_TOTP_SECRET='JBSWY3DPEHPK3PXP'
 ```
 
-Reload:
-```bash
-source ~/.bashrc
-```
-
-Verify (all four should print non-empty):
-```bash
-echo "API key set: ${ANGEL_API_KEY:+YES}"
-echo "Client code: $ANGEL_CLIENT_CODE"
-echo "PIN set: ${ANGEL_PIN:+YES}"
-echo "TOTP set: ${ANGEL_TOTP_SECRET:+YES}"
-```
-
-**Security:** Never commit these to git. `.env` files are already gitignored.
+The script checks `os.environ` first — shell vars take precedence over `.env`.
 
 ---
 
@@ -330,12 +364,13 @@ df = pd.read_parquet('tick_data/2026-07-02/TCS.parquet')
 Mean-Reversion-Tick-Angelone/
 ├── README.md          ← You are here
 ├── requirements.txt   ← 5 dependencies
-├── .gitignore         ← Excludes tick_data/ and *.log
+├── .gitignore         ← Excludes tick_data/, .env, *.log
+├── .env.example       ← Credential template — copy to .env and fill in
 └── tick_recorder.py   ← The whole tool (self-contained)
 ```
 
-**4 files total.** No external modules, no `scripts/`, no `docs/`.
-Just one Python file and this README.
+**5 files total.** No external modules, no `scripts/`, no `docs/`.
+One Python file, one credentials template, this README.
 
 ---
 

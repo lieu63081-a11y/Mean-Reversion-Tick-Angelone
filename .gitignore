@@ -21,8 +21,11 @@ env/
 .DS_Store
 Thumbs.db
 
-# Secrets (env vars never in git)
+# Secrets — .env is NEVER committed
+# BUT: .env.example IS committed (as a template), so use explicit .env ignore
 .env
+.env.local
+.env.*.local
 
 # Recorder outputs
 tick_data/
