@@ -80,8 +80,13 @@ def _autoload_dotenv():
     and populate os.environ for any key not already set.
 
     Zero-dependency implementation — no python-dotenv needed.
-    Format:  KEY=value   (# comments and blank lines ignored)
-             Optional single/double quotes around value are stripped.
+
+    Handles:
+        KEY=value
+        KEY="value" or KEY='value'  (quotes stripped)
+        export KEY=value             (shell-style export prefix stripped)
+        leading whitespace on lines
+        # comments and blank lines
     """
     candidates = [
         Path.cwd() / ".env",
@@ -90,17 +95,42 @@ def _autoload_dotenv():
     for env_path in candidates:
         if not env_path.exists():
             continue
+        loaded = 0
+        skipped_lines = []
         try:
             with open(env_path) as f:
-                for line in f:
-                    line = line.strip()
-                    if not line or line.startswith("#") or "=" not in line:
+                for lineno, raw in enumerate(f, 1):
+                    line = raw.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    # Handle shell-style export prefix (user muscle memory)
+                    if line.startswith("export "):
+                        line = line[len("export "):].lstrip()
+                    if "=" not in line:
+                        skipped_lines.append((lineno, raw.rstrip()))
                         continue
                     k, _, v = line.partition("=")
                     k = k.strip()
-                    v = v.strip().strip('"').strip("'")
+                    # Guard against accidental prefixes / weird chars
+                    if not k or not k.replace("_", "").isalnum():
+                        skipped_lines.append((lineno, raw.rstrip()))
+                        continue
+                    v = v.strip()
+                    # Strip surrounding matched quotes
+                    if len(v) >= 2 and v[0] == v[-1] and v[0] in ("'", '"'):
+                        v = v[1:-1]
                     # Only set if not already exported in the shell
                     os.environ.setdefault(k, v)
+                    loaded += 1
+            if skipped_lines and loaded == 0:
+                # Print helpful diagnostic
+                print(f"[.env] WARNING: {env_path} was found but "
+                      f"NO valid KEY=value lines were parsed.", file=sys.stderr)
+                print(f"[.env] Skipped lines:", file=sys.stderr)
+                for ln, txt in skipped_lines[:5]:
+                    print(f"       line {ln}: {txt!r}", file=sys.stderr)
+                print(f"[.env] Fix: use format 'KEY=value' (no 'export', no spaces around '=')",
+                      file=sys.stderr)
             return env_path
         except Exception as e:
             print(f"[.env] warning: failed to load {env_path}: {e}",
